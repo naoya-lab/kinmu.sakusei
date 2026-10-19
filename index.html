@@ -167,18 +167,21 @@ async function buildWorkbook(){
  const target=sheets.find(s=>s.getAttribute('name')==='様式');
  if(!target)throw new Error('「様式」シートが見つかりません。');
  const rid=target.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id') || target.getAttribute('r:id');
- const relationships=[...rx.getElementsByTagNameNS('*','Relationship')];
- let relationship=relationships.find(r=>r.getAttribute('Id')===rid);
- // Excel packages may use unusual relationship identifiers, or namespace prefixes.
- // If the selected sheet cannot be linked by r:id, try the single worksheet relationship.
- if(!relationship){
-  const worksheets=relationships.filter(r=>(r.getAttribute('Type')||'').endsWith('/worksheet'));
-  if(worksheets.length===1)relationship=worksheets[0];
+ // Parse relationship attributes independently of DOM namespace handling (Safari compatibility).
+ const relXml=(await rel.async('string')).replace(/^\\uFEFF/,'');
+ const relTags=[...relXml.matchAll(/<Relationship\\b[^>]*\\/?\\s*>/g)].map(m=>m[0]);
+ function attr(xml,name){
+  const match=xml.match(new RegExp('(?:\\\\s|<)'+name+'\\\\s*=\\\\s*["\\\\']([^"\\\\']*)["\\\\']'));
+  return match?match[1]:null;
  }
- if(!relationship)throw new Error('様式シートの参照先が不明です（r:id='+String(rid)+'）。定型Excelの形式を確認してください。');
- const path=(relationship.getAttribute('Target')||'').replace(/^\\/,'/');
- if(!path)throw new Error('様式シートの参照パスが空です。');
- const sheetPath=path.startsWith('/')?path.slice(1):path.startsWith('xl/')?path:'xl/'+path.replace(/^\.\.\//,'');
+ let link=relTags.map(t=>({id:attr(t,'Id'),type:attr(t,'Type'),path:attr(t,'Target')})).find(x=>x.id===rid);
+ if(!link){
+  const options=relTags.map(t=>({id:attr(t,'Id'),type:attr(t,'Type'),path:attr(t,'Target')})).filter(x=>x.type&&x.type.endsWith('/worksheet'));
+  if(options.length===1)link=options[0];
+ }
+ if(!link||!link.path)throw new Error('様式シートの参照先を取得できません（r:id='+String(rid)+'）。');
+ const raw=link.path.replace(/\\\\/g,'/');
+ const sheetPath=raw.startsWith('/')?raw.slice(1):raw.startsWith('xl/')?raw:'xl/'+raw.replace(/^\\.\\.\\//,'');
  const entry=zip.file(sheetPath);
  if(!entry)throw new Error('様式シートのデータが見つかりません: '+sheetPath);
  const doc=parse(await entry.async('string'));
