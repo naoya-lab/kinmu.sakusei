@@ -193,32 +193,32 @@ async function buildWorkbook(){
  const sheetPath=raw.startsWith('/')?raw.slice(1):raw.startsWith('xl/')?raw:'xl/'+raw.replace(/^\.\.\//,'');
  const entry=zip.file(sheetPath);
  if(!entry)throw new Error('様式シートのデータが見つかりません: '+sheetPath);
- const doc=parse(await entry.async('string'));
- if(doc.getElementsByTagName('parsererror').length)throw new Error('Excel XMLの読み込みに失敗しました。');
- const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
- const rows=[...doc.getElementsByTagNameNS(ns,'row')];
+ // Preserve worksheet XML verbatim outside the cells to avoid Excel recovery warnings.
+ let xml=await entry.async('string');
+ function writeCell(address,contentFn){
+  const exp=new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="'+address+'"[^>]*)(?:\\s*/>|>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?c>)','g');
+  let count=0;
+  xml=xml.replace(exp,(original,opening)=>{
+   count++;
+   const prefix=(opening.match(/^<([A-Za-z_][\\w.-]*:)/)||[])[1]||'';
+   const content=contentFn(prefix);
+   const head=opening.replace(/\s+t="[^"]*"/g,'');
+   return content===null?head+'/>':head+'>'+content+'</'+prefix+'c>';
+  });
+  if(count!==1)throw new Error('様式の '+address+' セルを正確に更新できません（'+count+'件）。');
+ }
  for(let day=1;day<=31;day++){
-  const row=rows.find(r=>r.getAttribute('r')===String(day+4));
-  if(!row)throw new Error((day+4)+'行目がありません。');
-  let cell=[...row.getElementsByTagNameNS(ns,'c')].find(c=>c.getAttribute('r')==='H'+(day+4));
-  if(!cell){cell=doc.createElementNS(ns,'c');cell.setAttribute('r','H'+(day+4));row.appendChild(cell);}
-  [...cell.children].forEach(e=>{if(['v','is','f'].includes(e.localName))cell.removeChild(e);});
-  cell.removeAttribute('t');
-  if(day<=state.rows.length && state.rows[day-1].mark){
-   cell.setAttribute('t','inlineStr');
-   const ins=doc.createElementNS(ns,'is'),t=doc.createElementNS(ns,'t');t.textContent='〇';ins.appendChild(t);cell.appendChild(ins);
+  const mark=day<=state.rows.length && state.rows[day-1].mark;
+  writeCell('H'+(day+4),p=>mark?'<'+p+'is><'+p+'t>〇</'+p+'t></'+p+'is>':null);
+  if(mark){
+   // Inline strings require t="inlineStr" on the cell.
+   const id='H'+(day+4);
+   xml=xml.replace(new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="'+id+'"[^>]*)(>)'),(all,open,close)=>open+' t="inlineStr"'+close);
   }
  }
- // 合計日数は数式の再計算に依存せず、チェックされた○の数を数値で保存する。
- const total=state.rows.filter(r=>r.mark).length;
- const totalRow=rows.find(r=>r.getAttribute('r')==='36');
- if(!totalRow)throw new Error('合計日数（36行目）が見つかりません。');
- let totalCell=[...totalRow.getElementsByTagNameNS(ns,'c')].find(c=>c.getAttribute('r')==='H36');
- if(!totalCell){totalCell=doc.createElementNS(ns,'c');totalCell.setAttribute('r','H36');totalRow.appendChild(totalCell);}
- [...totalCell.children].forEach(e=>{if(['v','is','f'].includes(e.localName))totalCell.removeChild(e);});
- totalCell.removeAttribute('t');
- const totalValue=doc.createElementNS(ns,'v');totalValue.textContent=String(total);totalCell.appendChild(totalValue);
- zip.file(sheetPath,new XMLSerializer().serializeToString(doc));
+ const count=state.rows.filter(r=>r.mark).length;
+ writeCell('H36',p=>'<'+p+'v>'+count+'</'+p+'v>');
+ zip.file(sheetPath,xml);
  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
 }
 $('download').addEventListener('click',async()=>{
