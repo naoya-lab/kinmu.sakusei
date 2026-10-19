@@ -1,0 +1,5 @@
+local_config.json
+*.pdf
+*.xlsx
+判定確認.csv
+__pycache__/
