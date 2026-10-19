@@ -21,7 +21,7 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <label for="pdf">勤務表 PDF（ファイルから選択／共有で受け取る）</label><input id="pdf" type="file" accept=".pdf,application/pdf">
 <details id="templateSettings"><summary>手当の定型Excelの初回登録・変更</summary><label for="xlsx">定型Excel（初回のみ選択。端末内に保存）</label><input id="xlsx" type="file" accept=".xlsx"><p id="templateStatus" class="muted">未登録です</p></details>
 <label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
-<p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。共有メニューからの受け取りはiOSの対応状況によります。<br>定型Excelは最初に1回だけ設定し、次月以降は自動で利用します。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
+<p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。iPhoneでは共有メニューの受取先に登録できないため、この画面の「勤務表 PDF」を選んでください。<br>定型Excelは最初に1回だけ設定し、次月以降は自動で利用します。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
 <button id="analyze">勤務日を解析</button>
 <p id="notice" role="status"></p>
 </section>
