@@ -223,35 +223,27 @@ async function buildWorkbook(){
  // Content types must identify workbook explicitly, not classify every .xml as workbook.
  const ctEntry=zip.file('[Content_Types].xml');
  if(!ctEntry)throw new Error('ExcelのContent Typesがありません。');
- const ctNs='http://schemas.openxmlformats.org/package/2006/content-types';
- const ctDoc=new DOMParser().parseFromString(await ctEntry.async('string'),'application/xml');
- if(ctDoc.getElementsByTagName('parsererror').length)throw new Error('Content Types XMLを解析できません。');
- const typesRoot=ctDoc.documentElement;
- const defaults=[...typesRoot.getElementsByTagNameNS(ctNs,'Default')];
- const xmlDefault=defaults.find(x=>x.getAttribute('Extension')==='xml');
- if(xmlDefault)xmlDefault.setAttribute('ContentType','application/xml');
- const workbookPart='/xl/workbook.xml';
- let workbookOverride=[...typesRoot.getElementsByTagNameNS(ctNs,'Override')].find(x=>x.getAttribute('PartName')===workbookPart);
- if(!workbookOverride){
-  workbookOverride=ctDoc.createElementNS(ctNs,'Override');
-  workbookOverride.setAttribute('PartName',workbookPart);
-  typesRoot.appendChild(workbookOverride);
+ // Keep original XML text to avoid Safari DOMParser issues with UTF-8 BOM.
+ let ctXml=(await ctEntry.async('string')).replace(/^\uFEFF/,'');
+ ctXml=ctXml.replace(/(<Default\b[^>]*\bExtension="xml"[^>]*\bContentType=")[^"]*(")/,
+  '$1application/xml$2');
+ if(!/PartName="\/xl\/workbook\.xml"/.test(ctXml)){
+  const override='<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>';
+  ctXml=ctXml.replace('</Types>',override+'</Types>');
  }
- workbookOverride.setAttribute('ContentType','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml');
- zip.file('[Content_Types].xml',new XMLSerializer().serializeToString(ctDoc));
+ if(!ctXml.includes('ContentType="application/xml"'))throw new Error('ExcelのXMLファイル種別を修正できません。');
+ zip.file('[Content_Types].xml',ctXml);
  // The source contains a named range pointing to deleted Sheet3 with localSheetId=2.
- const originalWorkbook=await wb.async('string');
- const workbookDoc=new DOMParser().parseFromString(originalWorkbook,'application/xml');
- if(workbookDoc.getElementsByTagName('parsererror').length)throw new Error('workbook.xmlを解析できません。');
- const sheetsNow=[...workbookDoc.getElementsByTagNameNS('*','sheet')];
- const definedNames=[...workbookDoc.getElementsByTagNameNS('*','definedName')];
- for(const def of definedNames){
-  const localId=def.getAttribute('localSheetId');
-  const invalidLocal=localId!==null && (Number(localId)<0 || Number(localId)>=sheetsNow.length);
-  const referencesMissing=/\bSheet3!/.test(def.textContent||'') && !sheetsNow.some(sh=>sh.getAttribute('name')==='Sheet3');
-  if(invalidLocal||referencesMissing)def.parentNode.removeChild(def);
- }
- zip.file('xl/workbook.xml',new XMLSerializer().serializeToString(workbookDoc));
+ // Remove invalid local names by editing only their XML elements.
+ let workbookXml=(await wb.async('string')).replace(/^\uFEFF/,'');
+ workbookXml=workbookXml.replace(/<definedName\b([^>]*)>([\s\S]*?)<\/definedName>/g,(full,attrs,value)=>{
+  const local=attrs.match(/\blocalSheetId="(\d+)"/);
+  const count=(workbookXml.match(/<sheet\b/g)||[]).length;
+  if(local && Number(local[1])>=count)return '';
+  if(/(?:Sheet3!|#REF!)/.test(value))return '';
+  return full;
+ });
+ zip.file('xl/workbook.xml',workbookXml);
  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
 }
 $('download').addEventListener('click',async()=>{
