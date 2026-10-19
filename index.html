@@ -201,6 +201,15 @@ async function buildWorkbook(){
    const ins=doc.createElementNS(ns,'is'),t=doc.createElementNS(ns,'t');t.textContent='〇';ins.appendChild(t);cell.appendChild(ins);
   }
  }
+ // 合計日数は数式の再計算に依存せず、チェックされた○の数を数値で保存する。
+ const total=state.rows.filter(r=>r.mark).length;
+ const totalRow=rows.find(r=>r.getAttribute('r')==='36');
+ if(!totalRow)throw new Error('合計日数（36行目）が見つかりません。');
+ let totalCell=[...totalRow.getElementsByTagNameNS(ns,'c')].find(c=>c.getAttribute('r')==='H36');
+ if(!totalCell){totalCell=doc.createElementNS(ns,'c');totalCell.setAttribute('r','H36');totalRow.appendChild(totalCell);}
+ [...totalCell.children].forEach(e=>{if(['v','is','f'].includes(e.localName))totalCell.removeChild(e);});
+ totalCell.removeAttribute('t');
+ const totalValue=doc.createElementNS(ns,'v');totalValue.textContent=String(total);totalCell.appendChild(totalValue);
  zip.file(sheetPath,new XMLSerializer().serializeToString(doc));
  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
 }
