@@ -166,13 +166,21 @@ async function buildWorkbook(){
  const sheets=[...wx.getElementsByTagNameNS('*','sheet')];
  const target=sheets.find(s=>s.getAttribute('name')==='様式');
  if(!target)throw new Error('「様式」シートが見つかりません。');
- const rid=target.getAttribute('r:id')||target.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
- const relationship=[...rx.getElementsByTagNameNS('*','Relationship')].find(r=>r.getAttribute('Id')===rid);
- if(!relationship)throw new Error('様式シートの参照先が不明です。');
- const path=relationship.getAttribute('Target').replace(/^\//,'');
- const sheetPath=path.startsWith('xl/')?path:'xl/'+path.replace(/^\.\.\//,'');
+ const rid=target.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id') || target.getAttribute('r:id');
+ const relationships=[...rx.getElementsByTagNameNS('*','Relationship')];
+ let relationship=relationships.find(r=>r.getAttribute('Id')===rid);
+ // Excel packages may use unusual relationship identifiers, or namespace prefixes.
+ // If the selected sheet cannot be linked by r:id, try the single worksheet relationship.
+ if(!relationship){
+  const worksheets=relationships.filter(r=>(r.getAttribute('Type')||'').endsWith('/worksheet'));
+  if(worksheets.length===1)relationship=worksheets[0];
+ }
+ if(!relationship)throw new Error('様式シートの参照先が不明です（r:id='+String(rid)+'）。定型Excelの形式を確認してください。');
+ const path=(relationship.getAttribute('Target')||'').replace(/^\\/,'/');
+ if(!path)throw new Error('様式シートの参照パスが空です。');
+ const sheetPath=path.startsWith('/')?path.slice(1):path.startsWith('xl/')?path:'xl/'+path.replace(/^\.\.\//,'');
  const entry=zip.file(sheetPath);
- if(!entry)throw new Error('様式シートのデータが見つかりません。');
+ if(!entry)throw new Error('様式シートのデータが見つかりません: '+sheetPath);
  const doc=parse(await entry.async('string'));
  if(doc.getElementsByTagName('parsererror').length)throw new Error('Excel XMLの読み込みに失敗しました。');
  const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
