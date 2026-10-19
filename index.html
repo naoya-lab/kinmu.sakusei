@@ -125,14 +125,22 @@ async function readSchedule(file,name){
   const hits=items.filter(i=>Math.abs(i.y-y)<6.5 && Math.abs(i.x+i.w/2-center)<head.pitch*.47);
   hits.sort((a,b)=>a.x-b.x);
   const text=hits.map(i=>clean(i.str)).join('');
-  const [vx,vy]=viewport.convertToViewportPoint(center,y);
-  const mx=Math.round(head.pitch*.37*1.8),my=11;
+  // Inspect only glyph bounding areas of text assigned to this day;
+  // scanning the whole column also catches red text from adjacent cells.
   let red=0;
-  for(let yy=Math.max(0,Math.floor(vy-my));yy<Math.min(canvas.height,Math.ceil(vy+my));yy+=1)
-   for(let xx=Math.max(0,Math.floor(vx-mx));xx<Math.min(canvas.width,Math.ceil(vx+mx));xx+=1){
-    const t=(yy*canvas.width+xx)*4,r=px[t],g=px[t+1],b=px[t+2];
-    if(r>135&&r>g*1.55&&r>b*1.45&&g<145&&b<145)red++;
+  for(const hit of hits){
+   const left=hit.x+Math.max(0,hit.w)*.08;
+   const right=hit.x+Math.max(0,hit.w)*.92;
+   const [x1,yy]=viewport.convertToViewportPoint(left,hit.y);
+   const [x2]=viewport.convertToViewportPoint(right,hit.y);
+   const baselineY=Math.round(yy);
+   for(let py=Math.max(0,baselineY-15);py<Math.min(canvas.height,baselineY+2);py++){
+    for(let xx=Math.max(0,Math.floor(Math.min(x1,x2)));xx<Math.min(canvas.width,Math.ceil(Math.max(x1,x2)));xx++){
+     const t=(py*canvas.width+xx)*4,r=px[t],g=px[t+1],blue=px[t+2];
+     if(r>135&&r>g*1.55&&r>blue*1.45&&g<145&&blue<145)red++;
+    }
    }
+  }
   const isRed=red>=4,off=exclusions.some(v=>text.includes(v));
   rows.push({day:k+1,text,red:isRed,off,mark:!!text&&!isRed&&!off});
  }
