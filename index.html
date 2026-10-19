@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>放射線取扱手当 | 月次作成</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;color:#182336;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0}main{max-width:860px;margin:auto;padding:24px 15px 80px}
+header{background:#183a5b;color:white;padding:23px 18px}header div{max-width:860px;margin:auto}
+h1{font-size:1.35rem;margin:0 0 5px}h2{font-size:1.04rem;margin:0 0 14px}
+p{line-height:1.7}.muted{color:#566678;font-size:.9rem}.panel{background:white;border:1px solid #dce4ee;border-radius:14px;padding:20px;margin:18px 0;box-shadow:0 2px 10px #183a5b0a}
+label{display:block;font-weight:600;margin:14px 0 5px}input[type=file],input[type=text]{width:100%;padding:12px;border:1px solid #acbdcc;border-radius:9px;background:white}
+button{border:0;background:#185a91;color:white;padding:13px 17px;border-radius:9px;font-size:1rem;font-weight:600;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#455970}.danger{color:#a72a2a}
+table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px;text-align:left;border-bottom:1px solid #e2e8ef}
+th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
+.summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
+</style></head><body>
+<header><div><h1>放射線取扱作業等手当</h1><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<main>
+<section class="panel">
+<h2>1. ファイルを選択</h2>
+<label for="pdf">勤務表 PDF</label><input id="pdf" type="file" accept=".pdf,application/pdf">
+<label for="xlsx">放射線取扱手当の定型 Excel</label><input id="xlsx" type="file" accept=".xlsx">
+<label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
+<p class="muted">ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
+<button id="analyze">勤務日を解析</button>
+<p id="notice" role="status"></p>
+</section>
+<section class="panel" id="result" hidden>
+<h2>2. 判定結果の確認・修正</h2>
+<p id="summary" class="summary"></p>
+<p class="muted">赤文字、週休・休暇等を初期除外します。「準夜・夜入・夜明」は除外しません。○欄は提出前に必ず確認してください。実際の手当支給要件の判定ではありません。</p>
+<div id="tableWrap"><table><thead><tr><th>日</th><th>勤務区分</th><th>○を記入</th><th>判定</th></tr></thead><tbody id="days"></tbody></table></div>
+<p><button id="download">確認内容でExcelを作成</button></p>
+</section>
+<footer>公開用コードに勤務表・個人情報・出力結果は保存しません。文字情報のないスキャンPDFやレイアウトが違うPDFは対応外です。</footer>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let state=null;
+const exclusions=['週','休','年休','夏季','子看','服忌','代','欠','出張'];
+function alertMsg(s,bad=false){$('notice').textContent=s;$('notice').className=bad?'danger':'muted';}
+function clean(s){return String(s||'').replace(/\s/g,'');}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function matchDate(str){
+ const s=str.replace(/[０-９]/g,c=>String(c.charCodeAt(0)-65296));
+ const m=s.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*放射線部勤務表/);
+ return m?{year:2018+Number(m[1]),month:Number(m[2])}:null;
+}
+function daysInMonth(y,m){return new Date(y,m,0).getDate();}
+function parseHeader(items,n){
+ const xs=items.filter(i=>/^\d{1,2}$/.test(i.str.trim())&&Number(i.str)>=1&&Number(i.str)<=31);
+ for(const start of xs.filter(i=>i.str.trim()==='1')){
+  const row=xs.filter(i=>Math.abs(i.y-start.y)<5).sort((a,b)=>a.x-b.x);
+  const idx=row.indexOf(start);const seq=row.slice(idx,idx+n);
+  if(seq.length===n&&seq.every((p,k)=>Number(p.str.trim())===k+1)){
+   const dx=seq.slice(1).map((p,i)=>p.x-seq[i].x).sort((a,b)=>a-b);
+   const pitch=dx[Math.floor(dx.length/2)];
+   if(pitch>12&&pitch<70&&dx.every(d=>Math.abs(d-pitch)<pitch*.28))return {seq,pitch};
+  }
+ }
+ throw new Error('日付の1日〜月末を正確に特定できません。PDFの形式が異なる可能性があります。');
+}
+async function readSchedule(file,name){
+ if(!window.pdfjsLib)throw new Error('PDF解析ライブラリを読み込めません。インターネット接続を確認してください。');
+ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+ const buffer=await file.arrayBuffer();
+ const doc=await pdfjsLib.getDocument({data:new Uint8Array(buffer)}).promise;
+ if(doc.numPages!==1)throw new Error('勤務表は1ページPDFのみ対応しています。');
+ const page=await doc.getPage(1), content=await page.getTextContent();
+ const items=content.items.filter(i=>i.str&&i.str.trim()).map(i=>({str:i.str,x:i.transform[4],y:i.transform[5],w:i.width}));
+ const dateCandidates=items.map(i=>matchDate(i.str)).filter(Boolean);
+ if(dateCandidates.length!==1)throw new Error('勤務表の対象年月を一意に認識できません。');
+ const {year,month}=dateCandidates[0];
+ if(month<1||month>12)throw new Error('対象月が不正です。');
+ const person=items.filter(i=>clean(i.str)===clean(name));
+ if(person.length!==1)throw new Error('対象者名が一意に認識できません。勤務表の氏名表記を確認してください。');
+ const n=daysInMonth(year,month),head=parseHeader(items,n);
+ const viewport=page.getViewport({scale:1.8}),canvas=document.createElement('canvas');
+ canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});
+ await page.render({canvasContext:ctx,viewport}).promise;
+ const px=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+ const y=person[0].y;
+ const rows=[];
+ for(let k=0;k<n;k++){
+  const col=head.seq[k],center=col.x+(col.w||0)/2;
+  const hits=items.filter(i=>Math.abs(i.y-y)<6.5 && Math.abs(i.x+i.w/2-center)<head.pitch*.47);
+  hits.sort((a,b)=>a.x-b.x);
+  const text=hits.map(i=>clean(i.str)).join('');
+  const [vx,vy]=viewport.convertToViewportPoint(center,y);
+  const mx=Math.round(head.pitch*.37*1.8),my=11;
+  let red=0;
+  for(let yy=Math.max(0,Math.floor(vy-my));yy<Math.min(canvas.height,Math.ceil(vy+my));yy+=1)
+   for(let xx=Math.max(0,Math.floor(vx-mx));xx<Math.min(canvas.width,Math.ceil(vx+mx));xx+=1){
+    const t=(yy*canvas.width+xx)*4,r=px[t],g=px[t+1],b=px[t+2];
+    if(r>135&&r>g*1.55&&r>b*1.45&&g<145&&b<145)red++;
+   }
+  const isRed=red>=4,off=exclusions.some(v=>text.includes(v));
+  rows.push({day:k+1,text,red:isRed,off,mark:!!text&&!isRed&&!off});
+ }
+ return {year,month,rows};
+}
+function render(){
+ $('result').hidden=false;
+ $('days').innerHTML=state.rows.map((r,k)=>'<tr><td>'+r.day+'</td><td>'+escapeHtml(r.text||'（空欄）')+'</td><td><input type="checkbox" data-day="'+k+'" '+(r.mark?'checked':'')+' aria-label="'+r.day+'日の丸印"></td><td>'+ (r.red?'赤字':r.off?'休日等':!r.text?'未読取':'対象候補')+'</td></tr>').join('');
+ $('days').querySelectorAll('input').forEach(el=>el.addEventListener('change',()=>{
+  state.rows[Number(el.dataset.day)].mark=el.checked;updateSummary();
+ }));
+ updateSummary();
+}
+function updateSummary(){$('summary').textContent=state.year+'年'+state.month+'月　○ '+state.rows.filter(r=>r.mark).length+'日／'+state.rows.length+'日';}
+$('analyze').addEventListener('click',async()=>{
+ $('result').hidden=true;state=null;const file=$('pdf').files[0],template=$('xlsx').files[0],name=$('name').value.trim();
+ if(!file||!template||!name){alertMsg('PDF・定型Excel・氏名を指定してください。',true);return;}
+ $('analyze').disabled=true;alertMsg('解析中…');
+ try{state=await readSchedule(file,name);state.template=template;render();alertMsg('解析完了。判定一覧を確認してからExcelを出力してください。');}
+ catch(e){console.error(e);alertMsg('解析できませんでした: '+e.message,true);}
+ finally{$('analyze').disabled=false;}
+});
+function downloadBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);}
+async function buildWorkbook(){
+ if(!window.JSZip)throw new Error('Excel編集ライブラリを読み込めません。');
+ const zip=await JSZip.loadAsync(await state.template.arrayBuffer());
+ const wb=zip.file('xl/workbook.xml'), rel=zip.file('xl/_rels/workbook.xml.rels');
+ if(!wb||!rel)throw new Error('Excelの内部構造を読み取れません。');
+ const parse=s=>new DOMParser().parseFromString(s,'application/xml');
+ const wx=parse(await wb.async('string')),rx=parse(await rel.async('string'));
+ const sheets=[...wx.getElementsByTagNameNS('*','sheet')];
+ const target=sheets.find(s=>s.getAttribute('name')==='様式');
+ if(!target)throw new Error('「様式」シートが見つかりません。');
+ const rid=target.getAttribute('r:id')||target.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+ const relationship=[...rx.getElementsByTagNameNS('*','Relationship')].find(r=>r.getAttribute('Id')===rid);
+ if(!relationship)throw new Error('様式シートの参照先が不明です。');
+ const path=relationship.getAttribute('Target').replace(/^\//,'');
+ const sheetPath=path.startsWith('xl/')?path:'xl/'+path.replace(/^\.\.\//,'');
+ const entry=zip.file(sheetPath);
+ if(!entry)throw new Error('様式シートのデータが見つかりません。');
+ const doc=parse(await entry.async('string'));
+ if(doc.getElementsByTagName('parsererror').length)throw new Error('Excel XMLの読み込みに失敗しました。');
+ const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+ const rows=[...doc.getElementsByTagNameNS(ns,'row')];
+ for(let day=1;day<=31;day++){
+  const row=rows.find(r=>r.getAttribute('r')===String(day+4));
+  if(!row)throw new Error((day+4)+'行目がありません。');
+  let cell=[...row.getElementsByTagNameNS(ns,'c')].find(c=>c.getAttribute('r')==='H'+(day+4));
+  if(!cell){cell=doc.createElementNS(ns,'c');cell.setAttribute('r','H'+(day+4));row.appendChild(cell);}
+  [...cell.children].forEach(e=>{if(['v','is','f'].includes(e.localName))cell.removeChild(e);});
+  cell.removeAttribute('t');
+  if(day<=state.rows.length && state.rows[day-1].mark){
+   cell.setAttribute('t','inlineStr');
+   const ins=doc.createElementNS(ns,'is'),t=doc.createElementNS(ns,'t');t.textContent='〇';ins.appendChild(t);cell.appendChild(ins);
+  }
+ }
+ zip.file(sheetPath,new XMLSerializer().serializeToString(doc));
+ return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
+}
+$('download').addEventListener('click',async()=>{
+ $('download').disabled=true;alertMsg('Excelファイルを生成中…');
+ try{
+  const b=await buildWorkbook();
+  downloadBlob(b,'放射線取扱手当_'+state.year+'年'+String(state.month).padStart(2,'0')+'月.xlsx');
+  alertMsg('Excelを作成しました。ダウンロードしたファイルを開いて、氏名・月・合計日数・○欄を再確認してください。');
+ }catch(e){console.error(e);alertMsg('Excelを作成できませんでした: '+e.message,true);}
+ finally{$('download').disabled=false;}
+});
+</script></body></html>
