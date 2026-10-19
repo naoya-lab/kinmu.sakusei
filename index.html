@@ -21,7 +21,7 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <label for="pdf">勤務表 PDF（ファイルから選択／共有で受け取る）</label><input id="pdf" type="file" accept=".pdf,application/pdf">
 <details id="templateSettings"><summary>手当の定型Excelの初回登録・変更</summary><label for="xlsx">定型Excel（初回のみ選択。端末内に保存）</label><input id="xlsx" type="file" accept=".xlsx"><p id="templateStatus" class="muted">未登録です</p></details>
 <label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
-<p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。iPhoneでは共有メニューの受取先に登録できないため、この画面の「勤務表 PDF」を選んでください。<br>定型Excelは最初に1回だけ設定し、次月以降は自動で利用します。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
+<p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。iPhoneでは共有メニューの受取先に登録できないため、この画面の「勤務表 PDF」を選んでください。<br>固定の定型Excelを自動使用します（未配置の場合のみ初回登録が必要です）。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
 <button id="analyze">勤務日を解析</button>
 <p id="notice" role="status"></p>
 </section>
@@ -42,7 +42,7 @@ const $=id=>document.getElementById(id);
 let state=null;let sharedPdf=null;let fixedTemplate=null;
 function db(){return new Promise((resolve,reject)=>{const req=indexedDB.open("kinmu-share",1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains("files"))req.result.createObjectStore("files");};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function stored(key,put){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction("files",put===undefined?"readonly":"readwrite"),s=tx.objectStore("files"),r=put===undefined?s.get(key):s.put(put,key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-async function loadStored(){try{fixedTemplate=await stored("template");$("templateStatus").textContent=fixedTemplate?"定型登録済み："+fixedTemplate.name:"未登録：最初だけExcelファイルを選択してください。";if(!fixedTemplate)$("templateSettings").open=true;const incoming=await stored("incoming");if(incoming){sharedPdf=incoming;$("notice").textContent="共有された勤務表："+incoming.name;const d=await db();const t=d.transaction("files","readwrite");t.objectStore("files").delete("incoming");}}catch(e){console.warn(e);$("templateStatus").textContent="端末内保存を使えません。毎回Excelを選択してください。";}}
+async function loadStored(){try{fixedTemplate=await stored("template");$("templateStatus").textContent=fixedTemplate?"定型登録済み："+fixedTemplate.name:"未登録：最初だけExcelファイルを選択してください。";if(!fixedTemplate){try{const response=await fetch("./template.xlsx",{cache:"no-store"});if(response.ok){const bytes=await response.blob();fixedTemplate=new File([bytes],"template.xlsx",{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});$("templateStatus").textContent="固定の定型Excelを使用します";$("templateSettings").open=false;}else $("templateSettings").open=true;}catch(e){$("templateSettings").open=true;}}const incoming=await stored("incoming");if(incoming){sharedPdf=incoming;$("notice").textContent="共有された勤務表："+incoming.name;const d=await db();const t=d.transaction("files","readwrite");t.objectStore("files").delete("incoming");}}catch(e){console.warn(e);$("templateStatus").textContent="端末内保存を使えません。毎回Excelを選択してください。";}}
 $("xlsx").addEventListener("change",async e=>{const f=e.target.files[0];if(f){fixedTemplate=f;try{await stored("template",f);$("templateStatus").textContent="定型登録済み："+f.name;}catch(e){$("templateStatus").textContent="保存できません（この画面の間だけ使用）。";}}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(console.warn);
 loadStored();
