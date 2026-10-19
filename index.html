@@ -167,21 +167,22 @@ async function buildWorkbook(){
  const target=sheets.find(s=>s.getAttribute('name')==='様式');
  if(!target)throw new Error('「様式」シートが見つかりません。');
  const rid=target.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id') || target.getAttribute('r:id');
- // Parse relationship attributes independently of DOM namespace handling (Safari compatibility).
- const relXml=(await rel.async('string')).replace(/^\\uFEFF/,'');
- const relTags=[...relXml.matchAll(/<Relationship\\b[^>]*\\/?\\s*>/g)].map(m=>m[0]);
- function attr(xml,name){
-  const match=xml.match(new RegExp('(?:\\\\s|<)'+name+'\\\\s*=\\\\s*["\\\\']([^"\\\\']*)["\\\\']'));
-  return match?match[1]:null;
- }
- let link=relTags.map(t=>({id:attr(t,'Id'),type:attr(t,'Type'),path:attr(t,'Target')})).find(x=>x.id===rid);
+ // Excel relationship XML: read attribute strings without depending on Safari DOM namespaces.
+ const relXml=(await rel.async('string')).replace(/^\uFEFF/,'');
+ const relTags=[...relXml.matchAll(/<Relationship\b[^>]*\/?\s*>/g)].map(m=>m[0]);
+ const getAttr=(tag,key)=>{
+  const attrs=[...tag.matchAll(/([A-Za-z][A-Za-z0-9:_-]*)\s*=\s*["']([^"']*)["']/g)];
+  const value=attrs.find(a=>a[1]===key);return value?value[2]:null;
+ };
+ const links=relTags.map(t=>({id:getAttr(t,'Id'),type:getAttr(t,'Type'),path:getAttr(t,'Target')}));
+ let link=links.find(x=>x.id===rid);
  if(!link){
-  const options=relTags.map(t=>({id:attr(t,'Id'),type:attr(t,'Type'),path:attr(t,'Target')})).filter(x=>x.type&&x.type.endsWith('/worksheet'));
-  if(options.length===1)link=options[0];
+  const worksheetLinks=links.filter(x=>x.type && x.type.endsWith('/worksheet'));
+  if(worksheetLinks.length===1)link=worksheetLinks[0];
  }
- if(!link||!link.path)throw new Error('様式シートの参照先を取得できません（r:id='+String(rid)+'）。');
- const raw=link.path.replace(/\\\\/g,'/');
- const sheetPath=raw.startsWith('/')?raw.slice(1):raw.startsWith('xl/')?raw:'xl/'+raw.replace(/^\\.\\.\\//,'');
+ if(!link || !link.path)throw new Error('様式シートの参照先を取得できません（r:id='+String(rid)+'）。');
+ const raw=link.path.replace(/\\/g,'/');
+ const sheetPath=raw.startsWith('/')?raw.slice(1):raw.startsWith('xl/')?raw:'xl/'+raw.replace(/^\.\.\//,'');
  const entry=zip.file(sheetPath);
  if(!entry)throw new Error('様式シートのデータが見つかりません: '+sheetPath);
  const doc=parse(await entry.async('string'));
