@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>放射線取扱手当 | 月次作成</title>
+<title>放射線取扱手当 | 月次作成</title><link rel="manifest" href="./manifest.webmanifest"><meta name="theme-color" content="#183a5b"><link rel="apple-touch-icon" href="./icon.svg">
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;color:#182336;background:#f4f7fb}
 *{box-sizing:border-box}body{margin:0}main{max-width:860px;margin:auto;padding:24px 15px 80px}
@@ -18,10 +18,10 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
-<label for="pdf">勤務表 PDF</label><input id="pdf" type="file" accept=".pdf,application/pdf">
-<label for="xlsx">放射線取扱手当の定型 Excel</label><input id="xlsx" type="file" accept=".xlsx">
+<label for="pdf">勤務表 PDF（ファイルから選択／共有で受け取る）</label><input id="pdf" type="file" accept=".pdf,application/pdf">
+<details id="templateSettings"><summary>手当の定型Excelの初回登録・変更</summary><label for="xlsx">定型Excel（初回のみ選択。端末内に保存）</label><input id="xlsx" type="file" accept=".xlsx"><p id="templateStatus" class="muted">未登録です</p></details>
 <label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
-<p class="muted">ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
+<p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。共有メニューからの受け取りはiOSの対応状況によります。<br>定型Excelは最初に1回だけ設定し、次月以降は自動で利用します。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
 <button id="analyze">勤務日を解析</button>
 <p id="notice" role="status"></p>
 </section>
@@ -39,7 +39,13 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-let state=null;
+let state=null;let sharedPdf=null;let fixedTemplate=null;
+function db(){return new Promise((resolve,reject)=>{const req=indexedDB.open("kinmu-share",1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains("files"))req.result.createObjectStore("files");};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function stored(key,put){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction("files",put===undefined?"readonly":"readwrite"),s=tx.objectStore("files"),r=put===undefined?s.get(key):s.put(put,key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function loadStored(){try{fixedTemplate=await stored("template");$("templateStatus").textContent=fixedTemplate?"定型登録済み："+fixedTemplate.name:"未登録：最初だけExcelファイルを選択してください。";if(!fixedTemplate)$("templateSettings").open=true;const incoming=await stored("incoming");if(incoming){sharedPdf=incoming;$("notice").textContent="共有された勤務表："+incoming.name;const d=await db();const t=d.transaction("files","readwrite");t.objectStore("files").delete("incoming");}}catch(e){console.warn(e);$("templateStatus").textContent="端末内保存を使えません。毎回Excelを選択してください。";}}
+$("xlsx").addEventListener("change",async e=>{const f=e.target.files[0];if(f){fixedTemplate=f;try{await stored("template",f);$("templateStatus").textContent="定型登録済み："+f.name;}catch(e){$("templateStatus").textContent="保存できません（この画面の間だけ使用）。";}}});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(console.warn);
+loadStored();
 const exclusions=['週','休','年休','夏季','子看','服忌','代','欠','出張'];
 function alertMsg(s,bad=false){$('notice').textContent=s;$('notice').className=bad?'danger':'muted';}
 function clean(s){return String(s||'').replace(/\s/g,'');}
@@ -113,8 +119,8 @@ function render(){
 }
 function updateSummary(){$('summary').textContent=state.year+'年'+state.month+'月　○ '+state.rows.filter(r=>r.mark).length+'日／'+state.rows.length+'日';}
 $('analyze').addEventListener('click',async()=>{
- $('result').hidden=true;state=null;const file=$('pdf').files[0],template=$('xlsx').files[0],name=$('name').value.trim();
- if(!file||!template||!name){alertMsg('PDF・定型Excel・氏名を指定してください。',true);return;}
+ $('result').hidden=true;state=null;const file=$('pdf').files[0]||sharedPdf,template=fixedTemplate||$('xlsx').files[0],name=$('name').value.trim();
+ if(!file||!template||!name){alertMsg('勤務表PDF・対象者名が必要です。定型Excelが未登録の場合は「初回登録・変更」から指定してください。',true);return;}
  $('analyze').disabled=true;alertMsg('解析中…');
  try{state=await readSchedule(file,name);state.template=template;render();alertMsg('解析完了。判定一覧を確認してからExcelを出力してください。');}
  catch(e){console.error(e);alertMsg('解析できませんでした: '+e.message,true);}
