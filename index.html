@@ -14,7 +14,7 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.19-12</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.19-13</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
@@ -221,28 +221,33 @@ async function buildWorkbook(){
  zip.file(sheetPath,xml);
  // Repair malformed package metadata present in the supplied template.
  // Content types must identify workbook explicitly, not classify every .xml as workbook.
+ // Normalize the package-level metadata of the original trimmed template.
  const ctEntry=zip.file('[Content_Types].xml');
- if(!ctEntry)throw new Error('ExcelのContent Typesがありません。');
- // Keep original XML text to avoid Safari DOMParser issues with UTF-8 BOM.
- let ctXml=(await ctEntry.async('string')).replace(/^\uFEFF/,'');
- ctXml=ctXml.replace(/(<Default\b[^>]*\bExtension="xml"[^>]*\bContentType=")[^"]*(")/,
-  '$1application/xml$2');
- if(!/PartName="\/xl\/workbook\.xml"/.test(ctXml)){
-  const override='<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>';
-  ctXml=ctXml.replace('</Types>',override+'</Types>');
- }
- if(!ctXml.includes('ContentType="application/xml"'))throw new Error('ExcelのXMLファイル種別を修正できません。');
- zip.file('[Content_Types].xml',ctXml);
- // The source contains a named range pointing to deleted Sheet3 with localSheetId=2.
- // Remove invalid local names by editing only their XML elements.
+ if(!ctEntry)throw new Error('Content Typesがありません。');
+ const knownParts=[
+  ['/xl/workbook.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml'],
+  ['/xl/worksheets/sheet1.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml'],
+  ['/xl/styles.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml'],
+  ['/xl/theme/theme1.xml','application/vnd.openxmlformats-officedocument.theme+xml'],
+  ['/xl/sharedStrings.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml']
+ ];
+ const xmlEscape=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+ const entries=knownParts.filter(p=>zip.file(p[0].slice(1)));
+ const contentTypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+  +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+  +'<Default Extension="xml" ContentType="application/xml"/>'
+  +entries.map(p=>'<Override PartName="'+xmlEscape(p[0])+'" ContentType="'+xmlEscape(p[1])+'"/>').join('')
+  +'</Types>';
+ zip.file('[Content_Types].xml',contentTypes);
+ // The given template contains an orphaned prefixed defined name for a deleted Sheet3.
  let workbookXml=(await wb.async('string')).replace(/^\uFEFF/,'');
- workbookXml=workbookXml.replace(/<definedName\b([^>]*)>([\s\S]*?)<\/definedName>/g,(full,attrs,value)=>{
+ workbookXml=workbookXml.replace(/<(?:[A-Za-z_][\w.-]*:)?definedName\b([^>]*)>[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?definedName>/g,(all,attrs)=>{
   const local=attrs.match(/\blocalSheetId="(\d+)"/);
-  const count=(workbookXml.match(/<sheet\b/g)||[]).length;
-  if(local && Number(local[1])>=count)return '';
-  if(/(?:Sheet3!|#REF!)/.test(value))return '';
-  return full;
+  if(local && Number(local[1])>=1)return '';
+  return all;
  });
+ workbookXml=workbookXml.replace(/<(?:[A-Za-z_][\w.-]*:)?definedNames>\s*<\/(?:[A-Za-z_][\w.-]*:)?definedNames>/g,'');
  zip.file('xl/workbook.xml',workbookXml);
  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
 }
