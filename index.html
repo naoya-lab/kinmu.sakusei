@@ -196,7 +196,7 @@ async function buildWorkbook(){
  // Preserve worksheet XML verbatim outside the cells to avoid Excel recovery warnings.
  let xml=await entry.async('string');
  function writeCell(address,contentFn){
-  const exp=new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="'+address+'"[^>]*)(?:\\s*/>|>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?c>)','g');
+  const exp=new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*?\\br="'+address+'"[^>]*?)(?:\\s*/>|>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?c>)','g');
   let count=0;
   xml=xml.replace(exp,(original,opening)=>{
    count++;
