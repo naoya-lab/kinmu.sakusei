@@ -18,7 +18,7 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
-<label for="pdf">勤務表 PDF（ファイルから選択／共有で受け取る）</label><input id="pdf" type="file" accept=".pdf,application/pdf">
+<label for="pdf">勤務表 PDF</label><input id="pdf" type="file" accept=".pdf,application/pdf"><p><button id="pasteFile" class="secondary" type="button">コピーしたPDFを貼り付け</button></p><p id="chosenFile" class="muted">勤務表PDFは未選択です。</p>
 <details id="templateSettings"><summary>手当の定型Excelの初回登録・変更</summary><label for="xlsx">定型Excel（初回のみ選択。端末内に保存）</label><input id="xlsx" type="file" accept=".xlsx"><p id="templateStatus" class="muted">未登録です</p></details>
 <label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
 <p class="muted">iPhoneの「ホーム画面に追加」でアプリとして使えます。iPhoneでは共有メニューの受取先に登録できないため、この画面の「勤務表 PDF」を選んでください。<br>固定の定型Excelを自動使用します（未配置の場合のみ初回登録が必要です）。ファイルはこのブラウザ内で解析します。サーバーへのアップロードは行いません（ライブラリの読み込みには通信が必要です）。</p>
@@ -40,9 +40,38 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 'use strict';
 const $=id=>document.getElementById(id);
 let state=null;let sharedPdf=null;let fixedTemplate=null;
+function acceptPdf(file){
+ if(!file || !(file.type==="application/pdf" || /\.pdf$/i.test(file.name||"")))return false;
+ sharedPdf=file;
+ $("chosenFile").textContent="選択済み："+(file.name||"コピーしたPDF");
+ alertMsg("PDFを受け取りました。勤務日を解析してください。");
+ return true;
+}
+$("pdf").addEventListener("change",()=>acceptPdf($("pdf").files[0]));
+document.addEventListener("paste",e=>{
+ const file=Array.from(e.clipboardData?.files||[]).find(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name||""));
+ if(file && acceptPdf(file)){e.preventDefault();return;}
+ for(const item of Array.from(e.clipboardData?.items||[])){
+  if(item.kind==="file" && acceptPdf(item.getAsFile())){e.preventDefault();return;}
+ }
+});
+$("pasteFile").addEventListener("click",async()=>{
+ if(!navigator.clipboard?.read){alertMsg("この端末ではボタンからPDFを貼り付けられません。勤務表PDFをファイルから選択してください。",true);return;}
+ try{
+  const items=await navigator.clipboard.read();
+  for(const item of items){
+   if(item.types.includes("application/pdf")){
+    const blob=await item.getType("application/pdf");
+    acceptPdf(new File([blob],"勤務表_貼り付け.pdf",{type:"application/pdf"}));return;
+   }
+  }
+  alertMsg("クリップボードにPDFファイルがありません。PDFをファイルから選択してください。",true);
+ }catch(e){alertMsg("PDFを貼り付けられませんでした。iOSの共有・クリップボード制約があるためファイル選択をご利用ください。",true);}
+});
+
 function db(){return new Promise((resolve,reject)=>{const req=indexedDB.open("kinmu-share",1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains("files"))req.result.createObjectStore("files");};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function stored(key,put){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction("files",put===undefined?"readonly":"readwrite"),s=tx.objectStore("files"),r=put===undefined?s.get(key):s.put(put,key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-async function loadStored(){try{fixedTemplate=await stored("template");$("templateStatus").textContent=fixedTemplate?"定型登録済み："+fixedTemplate.name:"未登録：最初だけExcelファイルを選択してください。";if(!fixedTemplate){try{const response=await fetch("./template.xlsx",{cache:"no-store"});if(response.ok){const bytes=await response.blob();fixedTemplate=new File([bytes],"template.xlsx",{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});$("templateStatus").textContent="固定の定型Excelを使用します";$("templateSettings").open=false;}else $("templateSettings").open=true;}catch(e){$("templateSettings").open=true;}}const incoming=await stored("incoming");if(incoming){sharedPdf=incoming;$("notice").textContent="共有された勤務表："+incoming.name;const d=await db();const t=d.transaction("files","readwrite");t.objectStore("files").delete("incoming");}}catch(e){console.warn(e);$("templateStatus").textContent="端末内保存を使えません。毎回Excelを選択してください。";}}
+async function loadStored(){try{fixedTemplate=await stored("template");$("templateStatus").textContent=fixedTemplate?"定型登録済み："+fixedTemplate.name:"未登録：最初だけExcelファイルを選択してください。";if(!fixedTemplate){try{const response=await fetch("./template.xlsx",{cache:"no-store"});if(response.ok){const bytes=await response.blob();fixedTemplate=new File([bytes],"template.xlsx",{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});$("templateStatus").textContent="固定の定型Excelを使用します";$("templateSettings").open=false;}else $("templateSettings").open=true;}catch(e){$("templateSettings").open=true;}}const incoming=await stored("incoming");if(incoming){acceptPdf(incoming);$("notice").textContent="共有された勤務表："+incoming.name;const d=await db();const t=d.transaction("files","readwrite");t.objectStore("files").delete("incoming");}}catch(e){console.warn(e);$("templateStatus").textContent="端末内保存を使えません。毎回Excelを選択してください。";}}
 $("xlsx").addEventListener("change",async e=>{const f=e.target.files[0];if(f){fixedTemplate=f;try{await stored("template",f);$("templateStatus").textContent="定型登録済み："+f.name;}catch(e){$("templateStatus").textContent="保存できません（この画面の間だけ使用）。";}}});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(console.warn);
 loadStored();
@@ -119,7 +148,7 @@ function render(){
 }
 function updateSummary(){$('summary').textContent=state.year+'年'+state.month+'月　○ '+state.rows.filter(r=>r.mark).length+'日／'+state.rows.length+'日';}
 $('analyze').addEventListener('click',async()=>{
- $('result').hidden=true;state=null;const file=$('pdf').files[0]||sharedPdf,template=fixedTemplate||$('xlsx').files[0],name=$('name').value.trim();
+ $('result').hidden=true;state=null;const file=sharedPdf||$('pdf').files[0],template=fixedTemplate||$('xlsx').files[0],name=$('name').value.trim();
  if(!file||!template||!name){alertMsg('勤務表PDF・対象者名が必要です。定型Excelが未登録の場合は「初回登録・変更」から指定してください。',true);return;}
  $('analyze').disabled=true;alertMsg('解析中…');
  try{state=await readSchedule(file,name);state.template=template;render();alertMsg('解析完了。判定一覧を確認してからExcelを出力してください。');}
