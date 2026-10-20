@@ -14,7 +14,7 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-19</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-20</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
@@ -36,7 +36,7 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 <p id="summary" class="summary"></p>
 <p class="muted">赤文字、週休・休暇等を初期除外します。「準夜・夜入・夜明」は除外しません。○欄は提出前に必ず確認してください。実際の手当支給要件の判定ではありません。</p>
 <div id="tableWrap"><table><thead><tr><th>日</th><th>勤務区分</th><th>○を記入</th><th>判定</th></tr></thead><tbody id="days"></tbody></table></div>
-<p><button id="download">確認内容でExcelを作成</button></p>
+<p><button id="download">確認内容でExcelを作成</button></p><div id="cleanup" hidden><button id="deleteTemp" type="button" class="secondary">保存した勤務表PDFを削除</button><p class="muted">Excel作成後に利用できます。iPhoneのショートカット「勤務表PDF削除」を起動します。削除対象の確認が必要です。</p></div>
 </section>
 <footer>公開用コードに勤務表・個人情報・出力結果は保存しません。文字情報のないスキャンPDFやレイアウトが違うPDFは対応外です。</footer>
 </main>
@@ -328,8 +328,13 @@ $('download').addEventListener('click',async()=>{
  try{
   const b=await buildWorkbook();
   downloadBlob(b,'放射線取扱手当_'+state.year+'年'+String(state.month).padStart(2,'0')+'月.xlsx');
-  alertMsg('Excelを作成しました。ダウンロードしたファイルを開いて、氏名・月・合計日数・○欄を再確認してください。');
+  $('cleanup').hidden=false;
+  alertMsg('Excelを作成しました。氏名・月・合計日数・○欄を確認してから、一時PDFの削除を行ってください。');
  }catch(e){console.error(e);alertMsg('Excelを作成できませんでした: '+e.message,true);}
  finally{$('download').disabled=false;}
+});
+$('deleteTemp').addEventListener('click',()=>{
+ if(!confirm('Excelの保存を確認しましたか？\nこの操作はiPhoneのショートカット「勤務表PDF削除」を起動します。削除対象を必ず確認してください。'))return;
+ location.href='shortcuts://run-shortcut?name='+encodeURIComponent('勤務表PDF削除');
 });
 </script></body></html>
