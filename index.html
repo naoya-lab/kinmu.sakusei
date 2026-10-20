@@ -14,7 +14,7 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.19-13</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-14</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
@@ -218,6 +218,27 @@ async function buildWorkbook(){
  }
  const count=state.rows.filter(r=>r.mark).length;
  writeCell('H36',p=>'<'+p+'v>'+count+'</'+p+'v>');
+ // A4 landscape: scale this form to exactly one printed page.
+ // Use the original XML namespace prefix so Excel keeps the worksheet valid.
+ const pfx=(xml.match(/<(?:([A-Za-z_][\w.-]*):)?worksheet\b/)||[])[1];
+ const tag=n=>(pfx?pfx+':':'')+n;
+ const rootOpen=xml.match(/<(?:[A-Za-z_][\w.-]*:)?worksheet\b[^>]*>/);
+ if(!rootOpen)throw new Error('印刷設定: worksheet要素が見つかりません。');
+ // sheetPr must precede sheetFormatPr/cols/sheetData.
+ if(!new RegExp('<'+tag('sheetPr')+'\\b').test(xml)){
+  xml=xml.replace(rootOpen[0],rootOpen[0]+'<'+tag('sheetPr')+'><'+tag('pageSetUpPr')+' fitToPage="1"/></'+tag('sheetPr')+'>');
+ }else if(!new RegExp('<'+tag('pageSetUpPr')+'\\b').test(xml)){
+  xml=xml.replace(new RegExp('(<'+tag('sheetPr')+'[^>]*>)'),'$1<'+tag('pageSetUpPr')+' fitToPage="1"/>');
+ }
+ const a4='<'+tag('pageSetup')+' paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1" useFirstPageNumber="0"/>';
+ if(new RegExp('<'+tag('pageSetup')+'\\b').test(xml)){
+  xml=xml.replace(new RegExp('<'+tag('pageSetup')+'\\b[^>]*/>'),a4);
+ }else{
+  // pageSetup follows pageMargins in ECMA-376 worksheet element order.
+  const margins=xml.match(new RegExp('<'+tag('pageMargins')+'\\b[^>]*/>'));
+  if(!margins)throw new Error('印刷設定: ページ余白の要素がありません。');
+  xml=xml.replace(margins[0],margins[0]+a4);
+ }
  zip.file(sheetPath,xml);
  // Repair malformed package metadata present in the supplied template.
  // Content types must identify workbook explicitly, not classify every .xml as workbook.
