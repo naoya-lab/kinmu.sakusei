@@ -14,7 +14,7 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-17</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-18</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
@@ -48,25 +48,43 @@ function acceptPdf(file){
  return true;
 }
 $("pdf").addEventListener("change",()=>acceptPdf($("pdf").files[0]));
-document.addEventListener("paste",e=>{
- const file=Array.from(e.clipboardData?.files||[]).find(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name||""));
- if(file && acceptPdf(file)){e.preventDefault();return;}
- for(const item of Array.from(e.clipboardData?.items||[])){
-  if(item.kind==="file" && acceptPdf(item.getAsFile())){e.preventDefault();return;}
+function clipboardInfo(types){return types.length?types.join(', '):'取得可能な形式なし';}
+async function pastedBlob(blob,label){
+ if(!blob || blob.size===0)return false;
+ const bytes=new Uint8Array(await blob.slice(0,5).arrayBuffer());
+ const pdf=bytes.length>=5 && String.fromCharCode(...bytes)==='%PDF-';
+ if(!pdf)return false;
+ return acceptPdf(new File([blob],label||'勤務表_貼り付け.pdf',{type:'application/pdf'}));
+}
+document.addEventListener("paste",async e=>{
+ const dt=e.clipboardData;
+ if(!dt)return;
+ const types=Array.from(dt.types||[]);
+ const files=Array.from(dt.files||[]);
+ for(const f of files){if(await pastedBlob(f,f.name||'勤務表.pdf')){e.preventDefault();return;}}
+ for(const item of Array.from(dt.items||[])){
+  if(item.kind==='file'){
+   const f=item.getAsFile();
+   if(f && await pastedBlob(f,f.name||'勤務表.pdf')){e.preventDefault();return;}
+  }
  }
+ const plain=dt.getData('text/plain');
+ if(plain)alertMsg('貼り付けられたのはファイルではなく文字・リンクです。形式: '+clipboardInfo(types)+'。認証付きLINE WORKSリンクはWebアプリから直接開けない場合があります。',true);
+ else alertMsg('PDF本体を取得できませんでした。形式: '+clipboardInfo(types)+'。LINE WORKSで「ファイルに保存」したPDFを選択してください。',true);
 });
 $("pasteFile").addEventListener("click",async()=>{
- if(!navigator.clipboard?.read){alertMsg("この端末ではボタンからPDFを貼り付けられません。勤務表PDFをファイルから選択してください。",true);return;}
+ if(!navigator.clipboard?.read){alertMsg('SafariがPDFのクリップボード読み取りに対応していません。ファイルを選択してください。',true);return;}
  try{
-  const items=await navigator.clipboard.read();
+  const items=await navigator.clipboard.read(),types=items.flatMap(i=>i.types);
   for(const item of items){
-   if(item.types.includes("application/pdf")){
-    const blob=await item.getType("application/pdf");
-    acceptPdf(new File([blob],"勤務表_貼り付け.pdf",{type:"application/pdf"}));return;
+   const candidates=item.types.filter(t=>t==='application/pdf'||t==='application/octet-stream');
+   for(const type of candidates){
+    const blob=await item.getType(type);
+    if(await pastedBlob(blob,'勤務表_貼り付け.pdf'))return;
    }
   }
-  alertMsg("クリップボードにPDFファイルがありません。PDFをファイルから選択してください。",true);
- }catch(e){alertMsg("PDFを貼り付けられませんでした。iOSの共有・クリップボード制約があるためファイル選択をご利用ください。",true);}
+  alertMsg('PDF本体が見つかりません。クリップボード形式: '+clipboardInfo(types)+'。LINE WORKSからファイルに保存して選択してください。',true);
+ }catch(e){alertMsg('貼り付け失敗 ('+(e.name||'Error')+')。'+(e.message||'')+'。ファイル選択も利用できます。',true);}
 });
 
 function db(){return new Promise((resolve,reject)=>{const req=indexedDB.open("kinmu-share",1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains("files"))req.result.createObjectStore("files");};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
