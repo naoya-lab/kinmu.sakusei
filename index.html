@@ -14,10 +14,16 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-18</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-19</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
+<div id="shortcutGuide" class="panel" hidden style="border-color:#8cabc3;background:#f7fbff;padding:14px">
+<h2>LINE WORKSからの取り込み</h2>
+<p>ショートカットが保存した勤務表PDFを、次の「ファイルを選択」から読み込んでください。保存先はショートカットで指定した「Shortcuts」フォルダです。</p>
+<p class="muted">iOS Safariの制約により、PDFの選択操作が1回必要です。PDFをWebサーバーへ送信することはありません。</p>
+<button id="chooseShortcutFile" type="button">保存した勤務表PDFを選ぶ</button>
+</div>
 <label for="pdf">勤務表 PDF</label><input id="pdf" type="file" accept=".pdf,application/pdf"><p><button id="pasteFile" class="secondary" type="button">コピーしたPDFを貼り付け</button></p><p id="chosenFile" class="muted">勤務表PDFは未選択です。</p>
 <details id="templateSettings"><summary>手当の定型Excelの初回登録・変更</summary><label for="xlsx">定型Excel（初回のみ選択。端末内に保存）</label><input id="xlsx" type="file" accept=".xlsx"><p id="templateStatus" class="muted">未登録です</p></details>
 <label for="name">対象者名（勤務表内の表記）</label><input id="name" type="text" value="長谷川直也" autocomplete="off">
@@ -40,6 +46,11 @@ th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:cent
 'use strict';
 const $=id=>document.getElementById(id);
 let state=null;let sharedPdf=null;let fixedTemplate=null;
+const params=new URLSearchParams(location.search);
+if(params.get('shortcut')==='1'){
+ $("shortcutGuide").hidden=false;
+ $("chooseShortcutFile").addEventListener("click",()=>$("pdf").click());
+}
 function acceptPdf(file){
  if(!file || !(file.type==="application/pdf" || /\.pdf$/i.test(file.name||"")))return false;
  sharedPdf=file;
