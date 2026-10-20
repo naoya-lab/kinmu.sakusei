@@ -14,7 +14,7 @@ table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:8px 6px
 th{background:#f2f5f8}td:nth-child(1){width:60px}td:nth-child(3){text-align:center;width:85px}
 .summary{font-size:1.12rem;font-weight:700}#notice{white-space:pre-wrap}#tableWrap{max-height:410px;overflow:auto}footer{font-size:.82rem;color:#536476}
 </style></head><body>
-<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-16</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
+<header><div><h1>放射線取扱作業等手当</h1><span style="font-size:.8rem;opacity:.85">Web版 2026.10.20-17</span><span>勤務表PDF → 手当Excel（月次・1名）</span></div></header>
 <main>
 <section class="panel">
 <h2>1. ファイルを選択</h2>
@@ -159,7 +159,7 @@ $('analyze').addEventListener('click',async()=>{
  $('result').hidden=true;state=null;const file=sharedPdf||$('pdf').files[0],template=fixedTemplate||$('xlsx').files[0],name=$('name').value.trim();
  if(!file||!template||!name){alertMsg('勤務表PDF・対象者名が必要です。定型Excelが未登録の場合は「初回登録・変更」から指定してください。',true);return;}
  $('analyze').disabled=true;alertMsg('解析中…');
- try{state=await readSchedule(file,name);state.template=template;render();alertMsg('解析完了。判定一覧を確認してからExcelを出力してください。');}
+ try{state=await readSchedule(file,name);state.template=template;state.name=name;render();alertMsg('解析完了。判定一覧を確認してからExcelを出力してください。');}
  catch(e){console.error(e);alertMsg('解析できませんでした: '+e.message,true);}
  finally{$('analyze').disabled=false;}
 });
@@ -216,6 +216,16 @@ async function buildWorkbook(){
    xml=xml.replace(new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="'+id+'"[^>]*)(>)'),(all,open,close)=>open+' t="inlineStr"'+close);
   }
  }
+ // Fill the template's original merged title and name fields.
+ const xmlText=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+ function writeText(address,value){
+  writeCell(address,p=>'<'+p+'is><'+p+'t>'+xmlText(value)+'</'+p+'t></'+p+'is>');
+  const regex=new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="'+address+'"[^>]*)(>)');
+  xml=xml.replace(regex,(full,head,close)=>head+' t="inlineStr"'+close);
+ }
+ const monthText='　　　　　　　'+state.month+' 月　放　射　線　取　扱　作　業　等　手　当';
+ writeText('A1',monthText);
+ writeText('M2',state.name);
  const count=state.rows.filter(r=>r.mark).length;
  writeCell('H36',p=>'<'+p+'v>'+count+'</'+p+'v>');
  // A4 portrait, one sheet, minimum margins and centered on page.
