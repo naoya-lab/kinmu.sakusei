@@ -9,7 +9,7 @@
 <div id="thumbs"></div><div class="grid"><div><label for="cropTop">画像上部の除外（%）</label><input id="cropTop" type="number" min="0" max="89" value="0"></div><div><label for="cropBottom">画像下部の除外（%）</label><input id="cropBottom" type="number" min="0" max="89" value="0"></div></div><p class="small">別の日・別のメッセージが写る場合は、上下の除外率を設定してください。例：上部25%、下部20%。</p><p class="small">複数画像に対応。画像は外部サーバーへアップロードしません。文字認識の初回利用時は認識ライブラリと日本語辞書をネットワークから取得します。</p>
 <div class="actions"><button id="ocr" class="primary">画像から文字を読み取る</button><button id="clear" class="secondary">入力を初期化</button></div><p id="status" role="status">画像を選択してください。</p><progress id="prog" max="100" value="0" class="hidden"></progress>
 <label for="raw">読み取った文字（手入力・貼付も可能）</label><textarea id="raw" rows="7" placeholder="LINE WORKSの文章を貼り付けても利用できます"></textarea>
-<div class="actions"><button id="parse" class="secondary">文字から項目を抽出</button></div>
+<div class="actions"><button id="parse" class="secondary">文字から項目を抽出</button></div><div id="warnings" class="metric" role="status" style="margin-top:12px;white-space:pre-wrap">確認事項はここに表示されます。</div>
 </section>
 <section><h2>2. 項目を確認・修正</h2><p class="small">認識ミスがあるため必ず元画像と比較してください。画像にない情報は空欄のまま残し、「未入力」「未確認」などは書き込みません。</p>
 <label>日付</label><input id="date" type="text" placeholder="9月25日(金)">
@@ -33,39 +33,44 @@ const ids=['date','night','tasks','duty','counts','changes','guidance','meeting'
 const $=id=>document.getElementById(id);
 const labels=['外科Image','MG','透視','DXA','AG','心カテ','CT','PET','RI','MRI'];
 function normalize(s){return s.replace(/\r/g,'').replace(/\u3000/g,' ').replace(/(?:-+>|－＞|ー>|⇒|➡|➔|➜|➝|➞|⟶|⟹)/g,'→').replace(/：/g,':').replace(/[（]/g,'(').replace(/[）]/g,')').replace(/^[・•･\s]+/,'').replace(/\s+/g,' ').trim()}
-function matchLine(s,label){const t=normalize(s);if(label==='CT')return /^CT(?:\s|:|[0-9０-９])/.test(t);if(label==='RI')return /^RI(?:\s|:|[0-9０-９])/.test(t);if(label==='MG')return /^MG(?:\s|:|[0-9０-９])/.test(t);return t.toUpperCase().startsWith(label.toUpperCase()+' ')||t.toUpperCase().startsWith(label.toUpperCase()+':')||new RegExp('^'+label+'[0-9０-９]').test(t)}
+function matchLine(s,label){const t=normalize(s).toUpperCase();const k=label.toUpperCase();return t.startsWith(k)&&(t.length===k.length||/[\s:0-9０-９-]/.test(t[k.length]))}
+function fixArrows(s){return s.replace(/(RI|PET|MRc|MR3|3FB|管理補佐|⑧|AM⑧|一般)\s*[うつっ>＞]+\s*(?=RI|MR|PET|管理補佐|一般|AM|PM|⑧|3FB)/gi,'$1→').replace(/(RI|PET|MRc|MR3|3FB|管理補佐|⑧|AM⑧|一般)\s*→\s*/gi,'$1→').replace(/\s*→\s*/g,'→')}
 function parse(){
-const input=$('raw').value;
-const lines=input.split('\n').map(normalize).filter(Boolean);
-const date=lines.find(l=>/\d{1,2}月\s*\d{1,2}日/.test(l));if(date){const m=date.match(/\d{1,2}月\s*\d{1,2}日(?:\s*\([月火水木金土日]\))?/);if(m)$('date').value=m[0]}
-const found={};let last='',pending='',inChanges=false;const changes=[];
-const role=/(?:副技師長|技師長|主査|主幹|主任|技師)/;
-const looksLikePerson=s=>role.test(s)&&!/(?:朝ブリーフィング|検査|研修|会議|指導監|医療機器)/.test(s);
-const saveChange=s=>{let v=normalize(s).replace(/\s*→\s*/g,'→').replace(/\s+(?=技師|主査|主幹|副技師長|主任)/g,'');if(!changes.includes(v))changes.push(v)};
-for(let i=0;i<lines.length;i++){
- const l=lines[i];
- const type=labels.find(k=>matchLine(l,k));
- if(type){found[type]='・'+l;last=type;pending='';inChanges=true;continue}
- if(last==='CT'&&/^(件|冠動脈|心臓)/.test(l)){found.CT+=l;continue}
- last='';
- if(/^(?:朝ブリーフィング|[1-6]\)|指導監|会議・その他)/.test(l)){pending='';if(!/^朝ブリーフィング/.test(l))inChanges=false;continue}
- if(!inChanges)continue;
- if(l.includes('→')){
-   let value=l;
-   if(pending&&(!looksLikePerson(l)||/^[→\s]/.test(l)))value=pending+' '+l;
-   if(looksLikePerson(value))saveChange(value);
-   pending='';
-   continue;
+ const lines=$('raw').value.split('\n').map(normalize).filter(Boolean),warnings=[],found={},changes=[];
+ const date=lines.find(l=>/\d{1,2}月\s*\d{1,2}日/.test(l));if(date){const m=date.match(/\d{1,2}月\s*\d{1,2}日(?:\s*\([月火水木金土日]\))?/);if(m)$('date').value=m[0]}
+ let started=false,stop=false;
+ for(let i=0;i<lines.length;i++){
+   const l=lines[i],type=labels.find(k=>matchLine(l,k));
+   if(type){started=true;found[type]='・'+l;continue}
+   if(!started||stop)continue;
+   if(/^(?:朝ブリーフィング|既読|Bish|[1-6]\)|指導監|会議・その他)/.test(l)){if(/^朝ブリーフィング/.test(l))stop=true;continue}
+   if(found.CT&&/^(?:件|冠動脈|心臓)\b/.test(l)&&!changes.length){found.CT+=l;continue}
+   const compact=fixArrows(l);
+   if(/(?:副技師長|技師長|技師|主査|主幹|主任)/.test(compact)&&(/→/.test(compact)||/(?:RI|PET|⑧|3FB|管理補佐).*[うつっ]/.test(compact))){
+      if(!changes.includes(compact))changes.push(compact);
+      if(!/→/.test(compact))warnings.push('配置変更の矢印を確認：'+l);
+      if(/\(\d{1,2}\)/.test(compact))warnings.push('氏名の誤認識の可能性：'+l);
+      continue;
+   }
+   if(changes.length&&/^\(?\d{1,2}:\d{2}\s*まで\)?$/.test(l)){changes[changes.length-1]+=' '+l;continue}
+   if(/^件$/.test(l)&&found.CT){found.CT+='件';continue}
  }
- if(looksLikePerson(l)){pending=l;continue}
- if(pending&&/^(?:→|RI|AM|PM|一般|管理補佐|3FB|MR|CT|PET|MG|DXA|AG|透視|心カテ|[0-9①-⑳])/i.test(l)){const v=pending+' '+l;if(v.includes('→'))saveChange(v);pending='';continue}
- if(pending&&/^\(?\d{1,2}[:：]\d{2}まで\)?/.test(l)&&changes.length){changes[changes.length-1]+=' '+l;pending='';continue}
- pending='';
-}
-$('counts').value=labels.map(k=>found[k]||'・'+k+'　').join('\n');
-$('changes').value=changes.join('\n');
-const brief=lines.find(l=>/朝ブリーフィング担当/.test(l));if(brief)$('brief').value=brief.replace(/.*朝ブリーフィング担当\s*[:：]?\s*/,'').trim();
-generate();$('status').textContent='件数 '+Object.keys(found).length+'/10項目、配置変更 '+changes.length+'件を抽出しました。氏名・変更前後の配置を確認してください。';
+ // 異常値を断定せずに候補として保持
+ for(const key of ['外科Image','MG','透視','DXA','AG','心カテ']){
+   const line=found[key];if(!line)continue;
+   const v=line.slice(1).replace(/^.*?\s+/,'').trim();
+   if(key==='AG'&&/^AG\s*1{2}\s*件$/.test(line.slice(1)))warnings.push('AGの「11件」は「1/1件」の誤認識の可能性があります。原画像と照合してください。');
+   else if(!/[-−ー0-9０-９]+\s*\/\s*[0-9０-９]+\s*件/.test(line))warnings.push(key+' の件数表記を確認：'+line.slice(1));
+ }
+ if(!found.CT)warnings.push('CT件数を検出できませんでした');
+ if(found.CT&&!/心臓\s*\d+\s*件/.test(found.CT))warnings.push('CTの「心臓○件」が画像の折り返しで欠けていないか確認してください');
+ $('counts').value=labels.map(k=>found[k]||'・'+k+'　').join('\n');
+ $('changes').value=changes.join('\n');
+ const idx=lines.findIndex(l=>/朝ブリーフィング担当/.test(l));
+ if(idx>=0){let v=lines[idx].replace(/.*朝ブリーフィング担当\s*[:：]?\s*/,'').trim();if(lines[idx+1]&&/^(師|技師)$/.test(lines[idx+1]))v+=lines[idx+1];$('brief').value=v;if(!/技師$/.test(v))warnings.push('朝ブリーフィング担当の末尾を確認：'+v)}
+ if(!changes.length)warnings.push('配置変更を検出できませんでした。画像と読み取り文字を照合してください。');
+ $('warnings').textContent=warnings.length?'要確認（自動確定していません）\n・'+[...new Set(warnings)].join('\n・'):'件数・配置変更は抽出できました。人名と数字を原画像で最終確認してください。';
+ generate();$('status').textContent='件数 '+Object.keys(found).length+'/10項目、配置変更 '+changes.length+'件を抽出。';
 }
 function field(id){return $(id).value.trim()}
 function generate(){const out=[field('date'),'','1)夜勤者・前日時間外勤務・呼出等',field('night'),'','2)タスク共有事項',field('tasks'),'','3)取込当番',field('duty'),'','4)本日シフト調整',field('counts'),'','配置変更・追加連絡',field('changes'),'','5)指導監',field('guidance'),'','6)会議・その他',field('meeting')];if($('brief').value.trim())out.push('','朝ブリーフィング担当：'+$('brief').value.trim());if($('groups').value.trim())out.push('','グループ一覧',field('groups'));$('preview').value=out.join('\n')+'\n';}
