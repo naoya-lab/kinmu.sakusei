@@ -21,7 +21,7 @@
 <label>5) 指導監</label><textarea id="guidance" rows="4"></textarea>
 <label>6) 会議・その他</label><textarea id="meeting" rows="4"></textarea>
 <label>朝ブリーフィング担当（追加項目・任意）</label><input id="brief" type="text">
-<label>グループ一覧（初期登録済み・編集可）</label><textarea id="groups" rows="7" placeholder="Gr.A ..."></textarea><p class="small">最初にいただいたTXTのGr.A～Gr.Dを初期登録しています。通常は入力不要です。人員変更がある場合はここで修正してください。</p>
+<label>PACS管理班・1班（初期登録済み）</label><textarea id="pacs1" rows="2" placeholder="1班の担当者"></textarea><label>PACS管理班・2班（編集可）</label><textarea id="pacs2" rows="2" placeholder="担当者が判明したら入力"></textarea><p class="small">1班は元TXTの「徳差、葛西、江良、佐藤（信）」を登録。2班の担当者は元TXTに記載がないため空欄のままにしています。</p><label>グループ一覧（初期登録済み・編集可）</label><textarea id="groups" rows="7" placeholder="Gr.A ..."></textarea><p class="small">最初にいただいたTXTのGr.A～Gr.Dを初期登録しています。通常は入力不要です。人員変更がある場合はここで修正してください。</p>
 </section>
 <section><h2>3. TXTファイルを生成</h2><div class="actions"><button class="primary" id="generate">TXTを更新</button><button class="secondary" id="download">TXTを保存</button><button class="secondary" id="copy">全文をコピー</button></div>
 <label for="preview">出力プレビュー（直接編集可）</label><textarea id="preview" rows="24"></textarea><p class="small">文字コードUTF-8、改行LF。元のTXTに近い6区分形式で出力します。プレビューを変更した場合はその内容で保存します。</p></section>
@@ -29,9 +29,10 @@
 
 <script>
 'use strict';
-const ids=['date','night','tasks','duty','counts','changes','guidance','meeting','brief','groups'];
+const ids=['date','night','tasks','duty','counts','changes','guidance','meeting','brief','groups','pacs1','pacs2'];
 const $=id=>document.getElementById(id);
 const DEFAULT_GROUPS="Gr.A（横山主幹、葛西主査、相馬技師、江良技師、村上技師、吉村技師）\nGr.B（山内主査、三浦主査、能登谷主査、田邊技師、附田技師、宿野部技師）\nGr.C（徳差主幹、泊主査、山本（康）主査、若佐谷主査、工藤（紫）技師、雪田技師）\nGr.D（山本(隆)主査、佐藤(信)主査、澤田主査、小畑技師、米田技師、長谷川技師）";
+const DEFAULT_PACS1="徳差、葛西、江良、佐藤（信）";
 const labels=['外科Image','MG','透視','DXA','AG','心カテ','CT','PET','RI','MRI'];
 function normalize(s){return s.replace(/\r/g,'').replace(/\u3000/g,' ').replace(/(?:-+>|－＞|ー>|⇒|➡|➔|➜|➝|➞|⟶|⟹)/g,'→').replace(/：/g,':').replace(/[（]/g,'(').replace(/[）]/g,')').replace(/^[・•･\s]+/,'').replace(/\s+/g,' ').trim()}
 function matchLine(s,label){const t=normalize(s).toUpperCase();const k=label.toUpperCase();return t.startsWith(k)&&(t.length===k.length||/[\s:0-9０-９-]/.test(t[k.length]))}
@@ -74,11 +75,13 @@ function parse(){
  generate();$('status').textContent='件数 '+Object.keys(found).length+'/10項目、配置変更 '+changes.length+'件を抽出。';
 }
 function field(id){return $(id).value.trim()}
-function generate(){const out=[field('date'),'','1)夜勤者・前日時間外勤務・呼出等',field('night'),'','2)タスク共有事項',field('tasks'),'','3)取込当番',field('duty'),'','4)本日シフト調整',field('counts'),''];if(field('changes'))out.push(field('changes'));if(field('brief'))out.push('朝ブリーフィング担当:'+field('brief'));out.push('','5)指導監',field('guidance'),'','6)会議・その他',field('meeting'));if($('groups').value.trim())out.push('','グループ一覧',field('groups'));$('preview').value=out.join('\n')+'\n';}
+function generate(){const out=[field('date'),'','1)夜勤者・前日時間外勤務・呼出等',field('night'),'','2)タスク共有事項',field('tasks'),'','3)取込当番',field('duty'),'','4)本日シフト調整',field('counts'),''];if(field('changes'))out.push(field('changes'));if(field('brief'))out.push('朝ブリーフィング担当:'+field('brief'));out.push('','5)指導監',field('guidance'),'','6)会議・その他',field('meeting'));out.push('','PACS管理班','1班：'+field('pacs1'),'2班：'+field('pacs2'));if($('groups').value.trim())out.push('','グループ一覧',field('groups'));$('preview').value=out.join('\n')+'\n';}
 $('generate').onclick=generate;$('parse').onclick=parse;
 $('download').onclick=()=>{if(!$('preview').value.trim())generate();const text=$('preview').value;const m=$('date').value.match(/(\d+)月\s*(\d+)日/);const fname=m?'シフト調整_'+m[1]+'月'+m[2]+'日.txt':'シフト調整.txt';const u=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)};
 $('copy').onclick=async()=>{if(!$('preview').value.trim())generate();try{await navigator.clipboard.writeText($('preview').value);$('status').textContent='TXTをコピーしました'}catch(e){$('status').textContent='コピーできません。プレビューを選択してコピーしてください'}};
-$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('groups').value=DEFAULT_GROUPS;$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
+$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('groups').value=DEFAULT_GROUPS;$('pacs1').value=DEFAULT_PACS1;$('pacs2').value='';$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
 $('groups').value=DEFAULT_GROUPS;
+$('pacs1').value=DEFAULT_PACS1;
+$('pacs2').value='';
 generate();
 </script></body></html>
