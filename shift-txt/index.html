@@ -21,7 +21,7 @@
 <label>5) 指導監</label><textarea id="guidance" rows="4"></textarea>
 <label>6) 会議・その他</label><textarea id="meeting" rows="4"></textarea>
 <label>朝ブリーフィング担当（追加項目・任意）</label><input id="brief" type="text">
-<label>グループ一覧（任意）</label><textarea id="groups" rows="3" placeholder="Gr.A ..."></textarea>
+<label>グループ一覧（初期登録済み・編集可）</label><textarea id="groups" rows="7" placeholder="Gr.A ..."></textarea><p class="small">最初にいただいたTXTのGr.A～Gr.Dを初期登録しています。通常は入力不要です。人員変更がある場合はここで修正してください。</p>
 </section>
 <section><h2>3. TXTファイルを生成</h2><div class="actions"><button class="primary" id="generate">TXTを更新</button><button class="secondary" id="download">TXTを保存</button><button class="secondary" id="copy">全文をコピー</button></div>
 <label for="preview">出力プレビュー（直接編集可）</label><textarea id="preview" rows="24"></textarea><p class="small">文字コードUTF-8、改行LF。元のTXTに近い6区分形式で出力します。プレビューを変更した場合はその内容で保存します。</p></section>
@@ -31,6 +31,7 @@
 'use strict';
 const ids=['date','night','tasks','duty','counts','changes','guidance','meeting','brief','groups'];
 const $=id=>document.getElementById(id);
+const DEFAULT_GROUPS="Gr.A（横山主幹、葛西主査、相馬技師、江良技師、村上技師、吉村技師）\nGr.B（山内主査、三浦主査、能登谷主査、田邊技師、附田技師、宿野部技師）\nGr.C（徳差主幹、泊主査、山本（康）主査、若佐谷主査、工藤（紫）技師、雪田技師）\nGr.D（山本(隆)主査、佐藤(信)主査、澤田主査、小畑技師、米田技師、長谷川技師）";
 const labels=['外科Image','MG','透視','DXA','AG','心カテ','CT','PET','RI','MRI'];
 function normalize(s){return s.replace(/\r/g,'').replace(/\u3000/g,' ').replace(/(?:-+>|－＞|ー>|⇒|➡|➔|➜|➝|➞|⟶|⟹)/g,'→').replace(/：/g,':').replace(/[（]/g,'(').replace(/[）]/g,')').replace(/^[・•･\s]+/,'').replace(/\s+/g,' ').trim()}
 function matchLine(s,label){const t=normalize(s).toUpperCase();const k=label.toUpperCase();return t.startsWith(k)&&(t.length===k.length||/[\s:0-9０-９-]/.test(t[k.length]))}
@@ -77,6 +78,7 @@ function generate(){const out=[field('date'),'','1)夜勤者・前日時間外�
 $('generate').onclick=generate;$('parse').onclick=parse;
 $('download').onclick=()=>{if(!$('preview').value.trim())generate();const text=$('preview').value;const m=$('date').value.match(/(\d+)月\s*(\d+)日/);const fname=m?'シフト調整_'+m[1]+'月'+m[2]+'日.txt':'シフト調整.txt';const u=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)};
 $('copy').onclick=async()=>{if(!$('preview').value.trim())generate();try{await navigator.clipboard.writeText($('preview').value);$('status').textContent='TXTをコピーしました'}catch(e){$('status').textContent='コピーできません。プレビューを選択してコピーしてください'}};
-$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
+$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('groups').value=DEFAULT_GROUPS;$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
+$('groups').value=DEFAULT_GROUPS;
 generate();
 </script></body></html>
