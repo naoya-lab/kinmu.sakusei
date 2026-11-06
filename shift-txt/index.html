@@ -11,7 +11,7 @@
 <label for="raw">読み取った文字（手入力・貼付も可能）</label><textarea id="raw" rows="7" placeholder="LINE WORKSの文章を貼り付けても利用できます"></textarea>
 <div class="actions"><button id="parse" class="secondary">文字から項目を抽出</button></div>
 </section>
-<section><h2>2. 項目を確認・修正</h2><p class="small">認識ミスがあるため必ず元画像と比較してください。画像にない情報は自動補完しません。</p>
+<section><h2>2. 項目を確認・修正</h2><p class="small">認識ミスがあるため必ず元画像と比較してください。画像にない情報は空欄のまま残し、「未入力」「未確認」などは書き込みません。</p>
 <label>日付</label><input id="date" type="text" placeholder="9月25日(金)">
 <label>1) 夜勤者・前日時間外勤務・呼出等</label><textarea id="night" placeholder="夜勤者名・件数・前日時間外勤務など"></textarea>
 <label>2) タスク共有事項</label><textarea id="tasks" placeholder="特になし 等"></textarea>
@@ -41,12 +41,12 @@ if(last==='CT'&&/^(件|冠動脈|心臓)/.test(l)){found.CT+=l;continue}
 last='';
 if(/→/.test(l)&&/(?:技師|主査|主幹|副技師長|主任|管理補佐)/.test(l))changes.push(l);
 }
-const rows=labels.map(k=>found[k]||'・'+k+'　【未確認】');
+const rows=labels.map(k=>found[k]||'・'+k+'　');
 $('counts').value=rows.join('\n');$('changes').value=changes.join('\n');
 const brief=lines.find(l=>/朝ブリーフィング担当/.test(l));if(brief)$('brief').value=brief.replace(/.*朝ブリーフィング担当\s*[:：]?\s*/,'').trim();
-generate();$('status').textContent='件数 '+Object.keys(found).length+'/10 項目を検出しました。未確認項目をチェックしてください。';
+generate();$('status').textContent='件数 '+Object.keys(found).length+'/10 項目を検出しました。画像にない項目は空欄にしています。';
 }
-function field(id){return $(id).value.trim()||'【未入力】'}
+function field(id){return $(id).value.trim()}
 function generate(){const out=[field('date'),'','1)夜勤者・前日時間外勤務・呼出等',field('night'),'','2)タスク共有事項',field('tasks'),'','3)取込当番',field('duty'),'','4)本日シフト調整',field('counts'),'','配置変更・追加連絡',field('changes'),'','5)指導監',field('guidance'),'','6)会議・その他',field('meeting')];if($('brief').value.trim())out.push('','朝ブリーフィング担当：'+$('brief').value.trim());if($('groups').value.trim())out.push('','グループ一覧',field('groups'));$('preview').value=out.join('\n')+'\n';}
 $('generate').onclick=generate;$('parse').onclick=parse;
 $('pics').onchange=()=>{const f=[...$('pics').files];$('thumbs').replaceChildren();for(const file of f){const im=new Image();im.src=URL.createObjectURL(file);im.onload=()=>URL.revokeObjectURL(im.src);im.alt=file.name;$('thumbs').append(im)}$('status').textContent=f.length+'枚を選択しました。';};
