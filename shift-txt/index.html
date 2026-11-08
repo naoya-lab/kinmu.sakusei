@@ -3,7 +3,7 @@
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;color:#18304b;background:#f3f6fa}*{box-sizing:border-box}body{margin:0}header{background:#12365c;color:white;padding:22px 16px}h1{font-size:22px;margin:0 0 6px}header p{margin:0;font-size:13px;color:#c9dbea}main{max-width:760px;margin:auto;padding:16px}section{background:#fff;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 5px #0001}h2{font-size:17px;margin:0 0 12px}label{display:block;font-size:14px;font-weight:650;margin:12px 0 5px}input,textarea,button{font:inherit}input[type=text],select,textarea{width:100%;border:1px solid #b8c8d9;border-radius:8px;padding:10px;font-size:15px;background:#fff}textarea{min-height:78px;resize:vertical;line-height:1.5}.small{color:#627487;font-size:12px;line-height:1.7}.primary{background:#1766ae;color:#fff;border:0;border-radius:9px;padding:12px 16px;font-weight:700}button{cursor:pointer}.secondary{border:1px solid #abc0d5;background:white;border-radius:9px;padding:11px 15px;color:#174d79}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.metric{background:#edf4fb;padding:10px;border-radius:8px;font-size:13px}#preview{min-height:260px;font-family:ui-monospace,Menlo,monospace;font-size:13px}#status{font-size:13px;margin:10px 0}progress{width:100%}img{max-width:100%;max-height:220px;object-fit:contain;margin:8px 0;border-radius:8px} .hidden{display:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:480px){.grid{grid-template-columns:1fr}} </style></head>
 <body><header><h1>シフト連絡 → TXT</h1><p>コピーした文章を貼り付け、シフト調整報告のTXTを作成</p></header>
-<main><p class="small" style="text-align:right">シフトTXTアプリ v2026.11.08-4｜PACS管理班・1班・2班 対応</p>
+<main><p class="small" style="text-align:right">シフトTXTアプリ v2026.11.09-1｜PACS管理班・1班・2班 対応</p>
 <section><h2>1. コピーした文章を貼り付け</h2>
 <p class="small">LINE WORKS等の文章をコピーし、下の欄にそのまま貼り付けます。画像は不要です。文章は端末内で処理し、外部へ送信しません。</p>
 <label for="raw">シフト連絡の文章</label><textarea id="raw" rows="16" placeholder="9月25日(金)&#10;・外科Image 1/3件(3被り)&#10;・MG 1/1件&#10;...&#10;前田副技師長 RI→管理補佐&#10;朝ブリーフィング担当:長谷川技師"></textarea>
@@ -18,14 +18,14 @@
 <label>3) 取込当番：下矢印から選択</label>
 <div class="grid"><div><label for="groupSelect">取込グループ</label><select id="groupSelect"><option value="">選択なし</option><option value="A">Gr.A</option><option value="B">Gr.B</option><option value="C">Gr.C</option><option value="D">Gr.D</option></select></div>
 <div><label for="pacsSelect">PACS管理班</label><select id="pacsSelect"><option value="">選択なし</option><option value="1">1班</option><option value="2">2班</option></select></div></div>
-<p class="small">選んだグループと班の担当者を自動表示します。2班は担当者未登録なので、登録するまでは班名だけ反映されます。</p>
+<p class="small">選んだグループと班の担当者を自動表示します。2班には三浦、柿崎、附田を登録済みです。</p>
 <textarea id="duty" rows="4" placeholder="選択したグループ・班の担当者がここに反映されます。手動編集も可能。"></textarea>
 <label>4) 本日シフト調整：件数</label><textarea id="counts" rows="11" placeholder="・外科Image ..."></textarea>
 <label>配置変更・追加連絡（原文のまま転記）</label><textarea id="changes" rows="5" placeholder="配置変更・午前中のみ・会議のための変更・注意書きなどをそのまま転記"></textarea>
 <label>5) 指導監</label><textarea id="guidance" rows="4"></textarea>
 <label>6) 会議・その他</label><textarea id="meeting" rows="4"></textarea>
 
-<details><summary style="cursor:pointer;font-weight:700;margin-bottom:10px">登録メンバーを確認・編集 ▼</summary><label>PACS管理班・1班（初期登録済み）</label><textarea id="pacs1" rows="2" placeholder="1班の担当者"></textarea><label>PACS管理班・2班（編集可）</label><textarea id="pacs2" rows="2" placeholder="担当者が判明したら入力"></textarea><p class="small">1班は元TXTから登録済み。2班は未登録です。選択した班だけが「3) 取込当番」に反映され、全班一覧はTXTへ出力しません。</p><label>グループ一覧（初期登録済み・編集可）</label><textarea id="groups" rows="7" placeholder="Gr.A ..."></textarea><p class="small">Gr.A～Gr.Dは選択用の登録データです。選択したグループだけが「3) 取込当番」に反映されます。全グループ一覧はTXTへ出力しません。</p></details>
+<details><summary style="cursor:pointer;font-weight:700;margin-bottom:10px">登録メンバーを確認・編集 ▼</summary><label>PACS管理班・1班（初期登録済み）</label><textarea id="pacs1" rows="2" placeholder="1班の担当者"></textarea><label>PACS管理班・2班（初期登録済み・編集可）</label><textarea id="pacs2" rows="2" placeholder="三浦、柿崎、附田"></textarea><p class="small">1班は元TXTから登録済み。2班は三浦、柿崎、附田を登録済みです。選択した班だけが「3) 取込当番」に反映され、全班一覧はTXTへ出力しません。</p><label>グループ一覧（初期登録済み・編集可）</label><textarea id="groups" rows="7" placeholder="Gr.A ..."></textarea><p class="small">Gr.A～Gr.Dは選択用の登録データです。選択したグループだけが「3) 取込当番」に反映されます。全グループ一覧はTXTへ出力しません。</p></details>
 </section>
 <section><h2>3. TXTファイルを生成</h2><div class="actions"><button class="primary" id="generate">TXTを更新</button><button class="secondary" id="download">TXTを保存</button><button class="secondary" id="copy">全文をコピー</button></div>
 <label for="preview">出力プレビュー（直接編集可）</label><textarea id="preview" rows="24"></textarea><p class="small">文字コードUTF-8、改行LF。元のTXTに近い6区分形式で出力します。プレビューを変更した場合はその内容で保存します。</p></section>
@@ -37,6 +37,7 @@ const ids=['date','night','tasks','duty','counts','changes','guidance','meeting'
 const $=id=>document.getElementById(id);
 const DEFAULT_GROUPS="Gr.A（横山主幹、葛西主査、相馬技師、江良技師、村上技師、吉村技師）\nGr.B（山内主査、三浦主査、能登谷主査、田邊技師、附田技師、宿野部技師）\nGr.C（徳差主幹、泊主査、山本（康）主査、若佐谷主査、工藤（紫）技師、雪田技師）\nGr.D（山本(隆)主査、佐藤(信)主査、澤田主査、小畑技師、米田技師、長谷川技師）";
 const DEFAULT_PACS1="徳差、葛西、江良、佐藤（信）";
+const DEFAULT_PACS2="三浦、柿崎、附田";
 const labels=['外科Image','MG','透視','DXA','AG','心カテ','CT','PET','RI','MRI'];
 function normalize(s){return s.replace(/\r/g,'').replace(/\u3000/g,' ').replace(/(?:-+>|－＞|ー>|⇒|➡|➔|➜|➝|➞|⟶|⟹)/g,'→').replace(/：/g,':').replace(/[（]/g,'(').replace(/[）]/g,')').replace(/^[・•･\s]+/,'').replace(/\s+/g,' ').trim()}
 function matchLine(s,label){const t=normalize(s).toUpperCase();const k=label.toUpperCase();if(label==='MRI'&&/^MR(?:\s|:|$)/.test(t))return true;return t.startsWith(k)&&(t.length===k.length||/[\s:0-9０-９-]/.test(t[k.length]))}
@@ -85,9 +86,9 @@ function generate(){const out=[field('date'),'','1)夜勤者・前日時間外�
 $('generate').onclick=generate;$('parse').onclick=parse;
 $('download').onclick=()=>{if(!$('preview').value.trim())generate();const text=$('preview').value;const m=$('date').value.match(/(\d+)月\s*(\d+)日/);const fname=m?'シフト調整_'+m[1]+'月'+m[2]+'日.txt':'シフト調整.txt';const u=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)};
 $('copy').onclick=async()=>{if(!$('preview').value.trim())generate();try{await navigator.clipboard.writeText($('preview').value);$('status').textContent='TXTをコピーしました'}catch(e){$('status').textContent='コピーできません。プレビューを選択してコピーしてください'}};
-$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('groupSelect').value='';$('pacsSelect').value='';$('groups').value=DEFAULT_GROUPS;$('pacs1').value=DEFAULT_PACS1;$('pacs2').value='';$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
+$('clear').onclick=()=>{if(!confirm('入力内容をすべて消去しますか？'))return;ids.forEach(id=>$(id).value='');$('groupSelect').value='';$('pacsSelect').value='';$('groups').value=DEFAULT_GROUPS;$('pacs1').value=DEFAULT_PACS1;$('pacs2').value=DEFAULT_PACS2;$('raw').value='';$('preview').value='';$('status').textContent='初期化しました'};
 $('groups').value=DEFAULT_GROUPS;
 $('pacs1').value=DEFAULT_PACS1;
-$('pacs2').value='';
+$('pacs2').value=DEFAULT_PACS2;
 generate();
 </script></body></html>
